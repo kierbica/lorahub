@@ -17,8 +17,8 @@ export class ProRequiredError extends Error {
 
 /* ------------------------------------------------------------------ */
 /*  Pollinations.ai — free Flux API, no key required                   */
-/*  Docs: gen.pollinations.ai/image/{prompt}?model=flux&...            */
-/*  Returns a JPEG/PNG image directly.                                 */
+/*  image.pollinations.ai/prompt/{prompt}?model=flux&...                */
+/*  Returns a JPEG image directly (no auth needed).                    */
 /* ------------------------------------------------------------------ */
 
 function pollinationsGenerate(
@@ -40,7 +40,7 @@ function pollinationsGenerate(
     nologo: "true",
   });
 
-  return `https://gen.pollinations.ai/image/${encodeURIComponent(styledPrompt)}?${params}`;
+  return `https://image.pollinations.ai/prompt/${encodeURIComponent(styledPrompt)}?${params}`;
 }
 
 /* ------------------------------------------------------------------ */
