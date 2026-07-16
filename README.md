@@ -1,36 +1,121 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# LoraHub
 
-## Getting Started
+AI image-generation tool using curated **SDXL / Flux LoRAs**, with a Free tier and a **Pro** subscription via **Lemon Squeezy**.
 
-First, run the development server:
+Built with **Next.js 16 (App Router) + TypeScript + Tailwind v4 + Prisma + Postgres**.
+
+---
+
+## Features
+
+- Generate images from text prompts using LoRA adapters on top of Flux
+- 6 curated LoRAs (3 free, 3 Pro-gated)
+- Free vs Pro tiers enforced server-side
+- Lemon Squeezy checkout + webhook-driven subscription status
+- Per-user generation gallery
+- Works with **no API keys** (returns styled placeholder images) — add keys for live generation & payments
+
+---
+
+## Local development
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+cp .env.example .env          # fill in values
+npx prisma db push            # create tables (needs DATABASE_URL pointing to Postgres)
+npm run dev                   # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+> **Database:** uses **Postgres** via `DATABASE_URL` (universal — works on any host).
+> For quick local dev you can run Postgres with Docker:
+> `docker run --rm -e POSTGRES_PASSWORD=postgres -p 5432:5432 postgres`
+> then set `DATABASE_URL="postgresql://postgres:postgres@localhost:5432/lorahub"`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Login is **dev-mode email login** (any email works). Add GitHub OAuth by setting
+`GITHUB_ID` / `GITHUB_SECRET`.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+---
 
-## Learn More
+## Environment variables
 
-To learn more about Next.js, take a look at the following resources:
+| Var | Required | Purpose |
+|---|---|---|
+| `DATABASE_URL` | ✅ | Postgres connection string |
+| `SESSION_SECRET` | ✅ | JWT signing secret (use a long random string) |
+| `REPLICATE_API_TOKEN` | optional | Real image generation via Flux. Without it, mock SVG images are returned |
+| `LEMONSQUEEZY_API_KEY` | optional* | Create checkout + customer portal |
+| `LEMONSQUEEZY_STORE_ID` | optional* | Your LS store id |
+| `LEMONSQUEEZY_SIGNING_SECRET` | optional* | Webhook signature verification |
+| `LEMONSQUEEZY_PRO_VARIANT_ID` | optional* | Pro plan variant id |
+| `LEMONSQUEEZY_PRO_PRICE_LABEL` | optional | Shown on pricing page (default `$12/mo`) |
+| `APP_URL` | optional | Used in checkout redirect (default `http://localhost:3000`) |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+\* Required only if you want real payments.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## Deploy anywhere (universal)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+This app has **no platform lock-in**. It needs only: a Node host + a Postgres database.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 1. Database (any provider)
+Create a Postgres database and get its URL:
+- **Vercel Postgres**, **Neon**, **Supabase**, **Railway**, **Render**, **Fly.io**, or self-hosted.
+- Set `DATABASE_URL` in the platform's env vars.
+
+### 2. Apply the schema
+Run once after the DB is reachable:
+```bash
+npx prisma db push
+```
+Most platforms let you set this as a **release / post-deploy command**.
+
+### 3. Build & run
+```bash
+npm install
+npm run build
+npm run start
+```
+
+### Platform-specific notes
+- **Vercel:** import the repo → framework = Next.js (auto). Set env vars. Add `prisma db push` as a deploy hook or run it locally against the Vercel Postgres URL.
+- **Railway / Render / Fly:** set `DATABASE_URL` + other env vars, set build = `npm run build`, start = `npm run start`, release = `npx prisma db push`.
+- **Docker:** `node:20` base, copy files, `npm ci && npm run build`, expose `PORT` (Next reads it automatically).
+
+---
+
+## Lemon Squeezy webhook
+
+Point a webhook at `/api/lemonsqueezy/webhook` with events:
+`subscription_created`, `subscription_updated`, `subscription_cancelled`, `order_created`.
+The handler verifies the `X-Signature` header (HMAC-SHA256) using `LEMONSQUEEZY_SIGNING_SECRET`
+and updates the user's `subscriptionStatus`. Pass `user_id` via checkout `custom_data` so the
+webhook can match the correct user.
+
+---
+
+## Project structure
+
+```
+src/
+  app/
+    page.tsx                 # landing
+    pricing/                 # free vs pro + checkout
+    generator/               # LoRA picker + prompt + gallery
+    dashboard/               # subscription status + history
+    login/                   # dev email login
+    api/
+      auth/{login,logout}    # session
+      generate               # image generation (pro-gated)
+      checkout               # LS checkout
+      billing/portal         # LS customer portal
+      lemonsqueezy/webhook   # subscription sync
+  lib/
+    db.ts                    # Prisma client
+    session.ts               # JWT cookie auth
+    loras.ts                 # LoRA catalog
+    lemonsqueezy.ts          # LS REST helpers
+    generation.ts            # Replicate Flux + mock fallback
+  middleware.ts              # protect routes
+prisma/schema.prisma         # Postgres schema
+```
